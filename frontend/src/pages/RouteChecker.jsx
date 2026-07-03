@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from "react-leaflet";
+import { GeoSearchControl, OpenStreetMapProvider } from "leaflet-geosearch";
 import "leaflet/dist/leaflet.css";
+import "leaflet-geosearch/dist/geosearch.css";
 import L from "leaflet";
 
 delete L.Icon.Default.prototype._getIconUrl;
@@ -40,6 +42,16 @@ function createColoredIcon(color) {
   });
 }
 
+// geocode a place name to lat/lng
+async function geocode(placeName) {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(placeName)}&format=json&limit=1`
+  );
+  const data = await res.json();
+  if (data.length === 0) return null;
+  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), display: data[0].display_name };
+}
+
 function RiskBadge({ total, high }) {
   const level = high > 2 ? "HIGH RISK" : high > 0 ? "MODERATE" : total > 0 ? "LOW RISK" : "CLEAR";
   const color = high > 2 ? "#EF4444" : high > 0 ? "#F59E0B" : total > 0 ? "#10B981" : "#6B7280";
@@ -58,47 +70,61 @@ function RiskBadge({ total, high }) {
 }
 
 export default function RouteChecker() {
-  const [from, setFrom] = useState({ lat: "", lng: "" });
-  const [to, setTo] = useState({ lat: "", lng: "" });
+  const [fromText, setFromText] = useState("");
+  const [toText, setToText] = useState("");
+  const [from, setFrom] = useState(null);
+  const [to, setTo] = useState(null);
   const [radius, setRadius] = useState(1.0);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
   const [mapCenter, setMapCenter] = useState([19.0760, 72.8777]);
 
   const handleCheck = async () => {
-    if (!from.lat || !from.lng || !to.lat || !to.lng) {
-      alert("Please enter both From and To coordinates");
+    if (!fromText || !toText) {
+      alert("Please enter both From and To locations");
       return;
     }
+
+    setGeocoding(true);
+    const fromCoords = await geocode(fromText);
+    const toCoords = await geocode(toText);
+    setGeocoding(false);
+
+    if (!fromCoords) { alert(`Could not find location: ${fromText}`); return; }
+    if (!toCoords) { alert(`Could not find location: ${toText}`); return; }
+
+    setFrom(fromCoords);
+    setTo(toCoords);
+    setMapCenter([
+      (fromCoords.lat + toCoords.lat) / 2,
+      (fromCoords.lng + toCoords.lng) / 2,
+    ]);
+
     setLoading(true);
     try {
       const res = await axios.get(`${API}/detections/near-route`, {
         params: {
-          lat1: parseFloat(from.lat), lng1: parseFloat(from.lng),
-          lat2: parseFloat(to.lat), lng2: parseFloat(to.lng),
+          lat1: fromCoords.lat, lng1: fromCoords.lng,
+          lat2: toCoords.lat, lng2: toCoords.lng,
           radius_km: radius,
         },
       });
       setResult(res.data);
-      setMapCenter([
-        (parseFloat(from.lat) + parseFloat(to.lat)) / 2,
-        (parseFloat(from.lng) + parseFloat(to.lng)) / 2,
-      ]);
     } catch {
       alert("Failed to check route");
     }
     setLoading(false);
   };
 
-  const routeLine = from.lat && to.lat
-    ? [[parseFloat(from.lat), parseFloat(from.lng)], [parseFloat(to.lat), parseFloat(to.lng)]]
+  const routeLine = from && to
+    ? [[from.lat, from.lng], [to.lat, to.lng]]
     : null;
 
   const high = result?.route_potholes.filter((d) => d.confidence_avg > 0.6).length || 0;
 
   return (
     <div style={{ minHeight: "calc(100vh - 64px)", background: "var(--gray-light)" }}>
-      {/* Header */}
       <div style={{ background: "var(--navy)", padding: "40px 48px" }}>
         <h1 style={{ color: "var(--white)", fontSize: 36, fontWeight: 700 }}>Route Checker</h1>
         <p style={{ color: "rgba(255,255,255,0.6)", marginTop: 8, fontSize: 16 }}>
@@ -114,54 +140,69 @@ export default function RouteChecker() {
         }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: 16, alignItems: "end" }}>
             <div>
-              <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gray)", marginBottom: 8, letterSpacing: 0.5 }}>FROM (lat, lng)</p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  placeholder="19.0760"
-                  value={from.lat}
-                  onChange={(e) => setFrom({ ...from, lat: e.target.value })}
-                  style={{ flex: 1, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 14 }}
-                />
-                <input
-                  placeholder="72.8777"
-                  value={from.lng}
-                  onChange={(e) => setFrom({ ...from, lng: e.target.value })}
-                  style={{ flex: 1, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 14 }}
-                />
-              </div>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gray)", marginBottom: 8, letterSpacing: 0.5 }}>
+                FROM
+              </p>
+              <input
+                placeholder="e.g. Andheri, Mumbai"
+                value={fromText}
+                onChange={(e) => setFromText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCheck()}
+                style={{
+                  width: "100%", padding: "10px 12px",
+                  border: "1px solid var(--border)", borderRadius: 6,
+                  fontSize: 14, outline: "none",
+                  fontFamily: "Inter, sans-serif",
+                }}
+              />
+              {from && (
+                <p style={{ fontSize: 11, color: "#10B981", marginTop: 4, fontWeight: 600 }}>
+                  ✓ {from.display.split(",").slice(0, 2).join(",")}
+                </p>
+              )}
             </div>
 
             <div>
-              <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gray)", marginBottom: 8, letterSpacing: 0.5 }}>TO (lat, lng)</p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  placeholder="19.2183"
-                  value={to.lat}
-                  onChange={(e) => setTo({ ...to, lat: e.target.value })}
-                  style={{ flex: 1, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 14 }}
-                />
-                <input
-                  placeholder="72.9781"
-                  value={to.lng}
-                  onChange={(e) => setTo({ ...to, lng: e.target.value })}
-                  style={{ flex: 1, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 14 }}
-                />
-              </div>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gray)", marginBottom: 8, letterSpacing: 0.5 }}>
+                TO
+              </p>
+              <input
+                placeholder="e.g. Thane, Mumbai"
+                value={toText}
+                onChange={(e) => setToText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCheck()}
+                style={{
+                  width: "100%", padding: "10px 12px",
+                  border: "1px solid var(--border)", borderRadius: 6,
+                  fontSize: 14, outline: "none",
+                  fontFamily: "Inter, sans-serif",
+                }}
+              />
+              {to && (
+                <p style={{ fontSize: 11, color: "#10B981", marginTop: 4, fontWeight: 600 }}>
+                  ✓ {to.display.split(",").slice(0, 2).join(",")}
+                </p>
+              )}
             </div>
 
             <div>
-              <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gray)", marginBottom: 8, letterSpacing: 0.5 }}>RADIUS (km)</p>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gray)", marginBottom: 8, letterSpacing: 0.5 }}>
+                RADIUS (km)
+              </p>
               <input
                 type="number" min="0.5" max="5" step="0.5"
                 value={radius}
                 onChange={(e) => setRadius(parseFloat(e.target.value))}
-                style={{ width: 80, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 6, fontSize: 14 }}
+                style={{
+                  width: 80, padding: "10px 12px",
+                  border: "1px solid var(--border)", borderRadius: 6, fontSize: 14,
+                }}
               />
             </div>
 
             <button
               onClick={handleCheck}
-              disabled={loading}
+              disabled={loading || geocoding}
               style={{
                 background: "var(--amber)", color: "var(--navy)",
                 border: "none", borderRadius: 8,
@@ -171,7 +212,7 @@ export default function RouteChecker() {
                 cursor: "pointer",
               }}
             >
-              {loading ? "Checking..." : "Check Route"}
+              {geocoding ? "Finding..." : loading ? "Checking..." : "Check Route"}
             </button>
           </div>
         </div>
@@ -186,6 +227,18 @@ export default function RouteChecker() {
 
                 {routeLine && (
                   <Polyline positions={routeLine} pathOptions={{ color: "#0A1628", weight: 4, dashArray: "8 4" }} />
+                )}
+
+                {from && (
+                  <Marker position={[from.lat, from.lng]}>
+                    <Popup><strong>From:</strong> {fromText}</Popup>
+                  </Marker>
+                )}
+
+                {to && (
+                  <Marker position={[to.lat, to.lng]}>
+                    <Popup><strong>To:</strong> {toText}</Popup>
+                  </Marker>
                 )}
 
                 {result.route_potholes.map((d) => (
@@ -238,7 +291,6 @@ export default function RouteChecker() {
                 </div>
               </div>
 
-              {/* Pothole list */}
               <div style={{
                 background: "var(--white)", borderRadius: 12,
                 border: "1px solid var(--border)", padding: 24,
