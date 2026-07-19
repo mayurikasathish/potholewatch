@@ -116,6 +116,21 @@ async def detect_potholes(
 
     avg_confidence = round(sum(confidences) / len(confidences), 3) if confidences else 0
 
+    # Don't save if no potholes detected
+    if len(detections) == 0:
+        return {
+            "id": None,
+            "location": {"latitude": latitude, "longitude": longitude},
+            "pothole_count": 0,
+            "confidence_avg": 0,
+            "status": "no_potholes_detected",
+            "reports_count": 0,
+            "is_duplicate": False,
+            "image_width": image.width,
+            "image_height": image.height,
+            "detections": [],
+        }
+
     # Save to database
     db = SessionLocal()
 

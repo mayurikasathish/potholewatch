@@ -165,7 +165,17 @@ export default function ReportPage() {
       const res = await axios.post(`${API}/detect`, formData);
       setResult(res.data);
       setStep(3);
-      if (res.data.is_duplicate) {
+
+      if (res.data.pothole_count === 0) {
+        toast("✅ No potholes detected in this image — road looks clear!", {
+          duration: 4000,
+          style: {
+            background: "#D1FAE5",
+            color: "#065F46",
+            fontFamily: "Space Grotesk, sans-serif",
+          },
+        });
+      } else if (res.data.is_duplicate) {
         toast(`⚠️ This pothole was already reported — thanks for confirming! ${res.data.reports_count} citizens have reported this issue.`, {
           duration: 5000,
           style: {

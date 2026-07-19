@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
-import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
@@ -11,7 +11,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-const API = import.meta.env.VITE_API_URL;;
+const API = import.meta.env.VITE_API_URL;
 
 function severityColor(confidence_avg) {
   if (confidence_avg > 0.6) return "#EF4444";
@@ -23,6 +23,24 @@ function severityLabel(confidence_avg) {
   if (confidence_avg > 0.6) return "High";
   if (confidence_avg > 0.4) return "Medium";
   return "Low";
+}
+
+function daysUnresolved(created_at) {
+  const created = new Date(created_at);
+  const now = new Date();
+  return Math.floor((now - created) / (1000 * 60 * 60 * 24));
+}
+
+function agingColor(days) {
+  if (days > 14) return "#EF4444";
+  if (days > 7) return "#F59E0B";
+  return "#10B981";
+}
+
+function agingLabel(days) {
+  if (days === 0) return "Reported today";
+  if (days === 1) return "1 day unresolved";
+  return `${days} days unresolved`;
 }
 
 function createColoredIcon(color) {
@@ -40,12 +58,23 @@ function createColoredIcon(color) {
   });
 }
 
+function MapController({ selected }) {
+  const map = useMap();
+  useEffect(() => {
+    if (selected) {
+      map.flyTo([selected.latitude, selected.longitude], 15, { duration: 1 });
+    }
+  }, [selected, map]);
+  return null;
+}
+
 export default function MapDashboard() {
   const [detections, setDetections] = useState([]);
   const [filter, setFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [selected, setSelected] = useState(null);
+  const markersRef = useRef({});
 
   useEffect(() => {
     axios.get(`${API}/detections`).then((res) => setDetections(res.data));
@@ -68,15 +97,11 @@ export default function MapDashboard() {
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 64px)" }}>
-
       {/* Sidebar */}
       <div style={{
-        width: 320,
-        background: "var(--navy)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        flexShrink: 0,
+        width: 320, background: "var(--navy)",
+        display: "flex", flexDirection: "column",
+        overflow: "hidden", flexShrink: 0,
       }}>
         <div style={{ padding: "28px 24px 20px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
           <h2 style={{ color: "var(--white)", fontSize: 20, fontWeight: 700, marginBottom: 20 }}>
@@ -91,29 +116,21 @@ export default function MapDashboard() {
               { label: "High", value: stats.high, color: "#EF4444" },
               { label: "Medium", value: stats.medium, color: "#F59E0B" },
             ].map(({ label, value, color }) => (
-              <div key={label} style={{
-                background: "rgba(255,255,255,0.07)",
-                borderRadius: 8,
-                padding: "12px 14px",
-              }}>
+              <div key={label} style={{ background: "rgba(255,255,255,0.07)", borderRadius: 8, padding: "12px 14px" }}>
                 <div style={{ fontSize: 24, fontWeight: 700, color, fontFamily: "Space Grotesk, sans-serif" }}>{value}</div>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>{label}</div>
               </div>
             ))}
           </div>
 
-          {/* Filters */}
+          {/* Status filter */}
           <div style={{ marginBottom: 12 }}>
             <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, fontWeight: 600, marginBottom: 8, letterSpacing: 1 }}>STATUS</p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {["all", "reported", "under_review", "resolved"].map((s) => (
                 <button key={s} onClick={() => setFilter(s)} style={{
-                  padding: "5px 12px",
-                  borderRadius: 20,
-                  border: "none",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
+                  padding: "5px 12px", borderRadius: 20, border: "none",
+                  fontSize: 12, fontWeight: 600, cursor: "pointer",
                   background: filter === s ? "var(--amber)" : "rgba(255,255,255,0.1)",
                   color: filter === s ? "var(--navy)" : "rgba(255,255,255,0.7)",
                   fontFamily: "Space Grotesk, sans-serif",
@@ -124,17 +141,14 @@ export default function MapDashboard() {
             </div>
           </div>
 
+          {/* Severity filter */}
           <div style={{ marginBottom: 12 }}>
             <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, fontWeight: 600, marginBottom: 8, letterSpacing: 1 }}>SEVERITY</p>
             <div style={{ display: "flex", gap: 8 }}>
               {["all", "high", "medium", "low"].map((s) => (
                 <button key={s} onClick={() => setSeverityFilter(s)} style={{
-                  padding: "5px 12px",
-                  borderRadius: 20,
-                  border: "none",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
+                  padding: "5px 12px", borderRadius: 20, border: "none",
+                  fontSize: 12, fontWeight: 600, cursor: "pointer",
                   background: severityFilter === s ? "var(--amber)" : "rgba(255,255,255,0.1)",
                   color: severityFilter === s ? "var(--navy)" : "rgba(255,255,255,0.7)",
                   fontFamily: "Space Grotesk, sans-serif",
@@ -171,42 +185,55 @@ export default function MapDashboard() {
           <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, fontWeight: 600, marginBottom: 12, letterSpacing: 1 }}>
             REPORTS ({filtered.length})
           </p>
-          {filtered.map((d) => (
-            <div
-              key={d.id}
-              onClick={() => setSelected(d)}
-              style={{
-                background: selected?.id === d.id ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)",
-                border: selected?.id === d.id ? "1px solid var(--amber)" : "1px solid rgba(255,255,255,0.08)",
-                borderRadius: 8,
-                padding: "12px 14px",
-                marginBottom: 8,
-                cursor: "pointer",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ color: "var(--white)", fontSize: 13, fontWeight: 600 }}>
-                  {d.pothole_count} pothole{d.pothole_count !== 1 ? "s" : ""}
-                </span>
-                <span style={{
-                  background: severityColor(d.confidence_avg),
-                  color: "white",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  padding: "2px 8px",
-                  borderRadius: 10,
-                }}>
-                  {severityLabel(d.confidence_avg)}
-                </span>
+          {filtered.map((d) => {
+            const days = daysUnresolved(d.created_at);
+            return (
+              <div
+                key={d.id}
+                onClick={() => setSelected(d)}
+                style={{
+                  background: selected?.id === d.id ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)",
+                  border: selected?.id === d.id ? "1px solid var(--amber)" : "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 8, padding: "12px 14px", marginBottom: 8, cursor: "pointer",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <span style={{ color: "var(--white)", fontSize: 13, fontWeight: 600 }}>
+                    {d.pothole_count} pothole{d.pothole_count !== 1 ? "s" : ""}
+                  </span>
+                  <span style={{
+                    background: severityColor(d.confidence_avg),
+                    color: "white", fontSize: 10, fontWeight: 700,
+                    padding: "2px 8px", borderRadius: 10,
+                  }}>
+                    {severityLabel(d.confidence_avg)}
+                  </span>
+                </div>
+                <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: "monospace" }}>
+                  {d.latitude?.toFixed(4)}, {d.longitude?.toFixed(4)}
+                </div>
+                {/* Aging indicator */}
+                {d.status !== "resolved" && (
+                  <div style={{
+                    marginTop: 6, fontSize: 11, fontWeight: 600,
+                    color: agingColor(days),
+                  }}>
+                    ⏱ {agingLabel(days)}
+                  </div>
+                )}
+                {d.status === "resolved" && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: "#10B981", fontWeight: 600 }}>
+                    ✅ Resolved
+                  </div>
+                )}
+                {d.reports_count > 1 && (
+                  <div style={{ marginTop: 4, fontSize: 11, color: "var(--amber)", fontWeight: 600 }}>
+                    👥 {d.reports_count} citizens reported this
+                  </div>
+                )}
               </div>
-              <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: "monospace" }}>
-                {d.latitude?.toFixed(4)}, {d.longitude?.toFixed(4)}
-              </div>
-              <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 11, marginTop: 4 }}>
-                {new Date(d.created_at).toLocaleDateString()}
-              </div>
-            </div>
-          ))}
+            );
+          })}
 
           {filtered.length === 0 && (
             <p style={{ color: "rgba(255,255,255,0.3)", fontSize: 13, textAlign: "center", marginTop: 32 }}>
@@ -220,35 +247,55 @@ export default function MapDashboard() {
       <div style={{ flex: 1 }}>
         <MapContainer center={[19.0760, 72.8777]} zoom={11} style={{ height: "100%", width: "100%" }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          {filtered.map((d) => (
-            <Marker
-              key={d.id}
-              position={[d.latitude, d.longitude]}
-              icon={createColoredIcon(severityColor(d.confidence_avg))}
-            >
-              <Popup>
-                <div style={{ fontFamily: "Inter, sans-serif", minWidth: 160 }}>
-                  <strong style={{ fontSize: 14 }}>{d.pothole_count} Pothole{d.pothole_count !== 1 ? "s" : ""} Detected</strong>
-                  <br />
-                  <span style={{ color: severityColor(d.confidence_avg), fontWeight: 600, fontSize: 12 }}>
-                    {severityLabel(d.confidence_avg)} Severity
-                  </span>
-                  <br />
-                  <span style={{ fontSize: 12, color: "#666" }}>Confidence: {Math.round(d.confidence_avg * 100)}%</span>
-                  <br />
-                  <span style={{ fontSize: 12, color: "#666" }}>Status: {d.status}</span>
-                  <br />
-                  <span style={{ fontSize: 11, color: "#999" }}>{new Date(d.created_at).toLocaleString()}</span>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+          <MapController selected={selected} />
+
+          {filtered.map((d) => {
+            const days = daysUnresolved(d.created_at);
+            return (
+              <Marker
+                key={d.id}
+                position={[d.latitude, d.longitude]}
+                icon={createColoredIcon(severityColor(d.confidence_avg))}
+                ref={(ref) => { if (ref) markersRef.current[d.id] = ref; }}
+              >
+                <Popup>
+                  <div style={{ fontFamily: "Inter, sans-serif", minWidth: 180 }}>
+                    <strong style={{ fontSize: 14 }}>{d.pothole_count} Pothole{d.pothole_count !== 1 ? "s" : ""} Detected</strong>
+                    <br />
+                    <span style={{ color: severityColor(d.confidence_avg), fontWeight: 600, fontSize: 12 }}>
+                      {severityLabel(d.confidence_avg)} Severity
+                    </span>
+                    <br />
+                    <span style={{ fontSize: 12, color: "#666" }}>Confidence: {Math.round(d.confidence_avg * 100)}%</span>
+                    <br />
+                    <span style={{ fontSize: 12, color: "#666" }}>Status: {d.status}</span>
+                    <br />
+                    {d.status !== "resolved" && (
+                      <span style={{ fontSize: 12, color: agingColor(days), fontWeight: 600 }}>
+                        ⏱ {agingLabel(days)}
+                      </span>
+                    )}
+                    {d.reports_count > 1 && (
+                      <>
+                        <br />
+                        <span style={{ fontSize: 12, color: "#F59E0B", fontWeight: 600 }}>
+                          👥 {d.reports_count} citizens reported
+                        </span>
+                      </>
+                    )}
+                    <br />
+                    <span style={{ fontSize: 11, color: "#999" }}>{new Date(d.created_at).toLocaleString()}</span>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
 
           {showHeatmap && filtered.map((d) => (
             <Circle
               key={`circle-${d.id}`}
               center={[d.latitude, d.longitude]}
-              radius={300}
+              radius={500}
               pathOptions={{
                 color: severityColor(d.confidence_avg),
                 fillColor: severityColor(d.confidence_avg),
