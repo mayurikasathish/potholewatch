@@ -8,6 +8,8 @@ from PIL import Image
 from sqlalchemy import create_engine, Column, Integer, Float, String, Text, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from geoalchemy2 import Geography
+from geoalchemy2.functions import ST_DWithin, ST_MakePoint
 from datetime import datetime
 import io
 import os
@@ -41,6 +43,8 @@ class Detection(Base):
     image_path = Column(Text)
     status = Column(String(50), default="reported")
     created_at = Column(DateTime, default=datetime.utcnow)
+    reports_count = Column(Integer, default=1)
+    location = Column(Geography(geometry_type='POINT', srid=4326))
 
 class DetectionImage(Base):
     __tablename__ = "detection_images"
@@ -108,17 +112,42 @@ async def detect_potholes(
 
     # Save to database
     db = SessionLocal()
-    record = Detection(
-        latitude=latitude,
-        longitude=longitude,
-        pothole_count=len(detections),
-        confidence_avg=avg_confidence,
-        image_path=image_path,
-        status="reported"
-    )
-    db.add(record)
-    db.commit()
-    db.refresh(record)
+
+    # Check for duplicate within 50 meters using PostGIS
+    new_point = f"SRID=4326;POINT({longitude} {latitude})"
+    existing = db.query(Detection).filter(
+        ST_DWithin(
+            Detection.location,
+            new_point,
+            50  # 50 meters
+        )
+    ).first()
+
+    is_duplicate = False
+    if existing:
+        # Duplicate found — increment reports_count
+        existing.reports_count += 1
+        existing.pothole_count = max(existing.pothole_count, len(detections))
+        existing.confidence_avg = max(existing.confidence_avg, avg_confidence)
+        db.commit()
+        db.refresh(existing)
+        record = existing
+        is_duplicate = True
+    else:
+        # New pothole — create fresh record
+        record = Detection(
+            latitude=latitude,
+            longitude=longitude,
+            pothole_count=len(detections),
+            confidence_avg=avg_confidence,
+            image_path=image_path,
+            status="reported",
+            reports_count=1,
+            location=f"SRID=4326;POINT({longitude} {latitude})"
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
 
     # Save supporting images
     for sup_file in supporting_images:
@@ -136,6 +165,7 @@ async def detect_potholes(
     # Extract values before closing session
     record_id = record.id
     record_status = record.status
+    record_reports_count = record.reports_count
     db.close()
 
     return {
@@ -144,6 +174,8 @@ async def detect_potholes(
         "pothole_count": len(detections),
         "confidence_avg": avg_confidence,
         "status": record_status,
+        "reports_count": record_reports_count,
+        "is_duplicate": is_duplicate,
         "image_width": image.width,
         "image_height": image.height,
         "detections": detections,
@@ -163,7 +195,8 @@ def get_all_detections():
             "confidence_avg": r.confidence_avg,
             "status": r.status,
             "created_at": r.created_at,
-            "image_path": r.image_path
+            "image_path": r.image_path,
+            "reports_count": r.reports_count,
         }
         for r in records
     ]

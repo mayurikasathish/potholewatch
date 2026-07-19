@@ -253,7 +253,7 @@ const [modalIndex, setModalIndex] = useState(0);
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "var(--gray-light)" }}>
-                {["ID", "Location", "Potholes", "Confidence", "Severity", "Status", "Date", "Image", "Actions"].map(h => (
+                {["ID", "Location", "Potholes", "Reports", "Confidence", "Severity", "Status", "Date", "Image", "Actions"].map(h => (
                   <th key={h} style={{
                     padding: "12px 16px", textAlign: "left",
                     fontSize: 11, fontWeight: 700, color: "var(--gray)",
@@ -284,6 +284,16 @@ const [modalIndex, setModalIndex] = useState(0);
                     </a>
                   </td>
                   <td style={{ padding: "14px 16px", fontSize: 14, fontWeight: 700 }}>{d.pothole_count}</td>
+                  <td style={{ padding: "14px 16px" }}>
+                    <span style={{
+                      background: d.reports_count > 1 ? "#FEF3C7" : "var(--gray-light)",
+                      color: d.reports_count > 1 ? "#92400E" : "var(--gray)",
+                      fontSize: 12, fontWeight: 700,
+                      padding: "3px 10px", borderRadius: 10,
+                    }}>
+                      {d.reports_count} {d.reports_count > 1 ? "citizens" : "citizen"}
+                    </span>
+                  </td>
                   <td style={{ padding: "14px 16px", fontSize: 13 }}>{Math.round(d.confidence_avg * 100)}%</td>
                   <td style={{ padding: "14px 16px" }}>
                     <span style={{ color: severityColor(d.confidence_avg), fontWeight: 700, fontSize: 12 }}>

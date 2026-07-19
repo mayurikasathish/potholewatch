@@ -165,7 +165,18 @@ export default function ReportPage() {
       const res = await axios.post(`${API}/detect`, formData);
       setResult(res.data);
       setStep(3);
-      toast.success(`${res.data.pothole_count} pothole${res.data.pothole_count !== 1 ? "s" : ""} detected!`);
+      if (res.data.is_duplicate) {
+        toast(`⚠️ This pothole was already reported — thanks for confirming! ${res.data.reports_count} citizens have reported this issue.`, {
+          duration: 5000,
+          style: {
+            background: "#FEF3C7",
+            color: "#92400E",
+            fontFamily: "Space Grotesk, sans-serif",
+          },
+        });
+      } else {
+        toast.success(`${res.data.pothole_count} pothole${res.data.pothole_count !== 1 ? "s" : ""} detected and reported!`);
+      }
     } catch {
       toast.error("Detection failed — is the backend running?");
     }
@@ -336,7 +347,7 @@ export default function ReportPage() {
                 {[
                   { label: "Potholes", value: result.pothole_count, color: "#EF4444" },
                   { label: "Avg Confidence", value: `${Math.round(result.confidence_avg * 100)}%`, color: "#F59E0B" },
-                  { label: "Status", value: result.status, color: "#10B981" },
+                  { label: "Reports", value: result.reports_count, color: result.is_duplicate ? "#F59E0B" : "#10B981" },
                 ].map(({ label, value, color }) => (
                   <div key={label} style={{
                     background: "var(--gray-light)", borderRadius: 8,
