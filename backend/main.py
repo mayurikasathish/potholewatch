@@ -282,3 +282,60 @@ def get_priority_detections():
 
     scored.sort(key=lambda x: x["priority_score"], reverse=True)
     return scored
+
+@app.get("/analytics/summary")
+def analytics_summary():
+    db = SessionLocal()
+    records = db.query(Detection).all()
+    db.close()
+
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+
+    total = len(records)
+    resolved = len([r for r in records if r.status == "resolved"])
+    unresolved = len([r for r in records if r.status != "resolved"])
+    high_severity = len([r for r in records if r.confidence_avg > 0.6])
+
+    # Average repair time (only resolved ones)
+    resolved_records = [r for r in records if r.status == "resolved"]
+    if resolved_records:
+        repair_times = []
+        for r in resolved_records:
+            created = r.created_at.replace(tzinfo=timezone.utc) if r.created_at.tzinfo is None else r.created_at
+            repair_times.append((now - created).days)
+        avg_repair_days = round(sum(repair_times) / len(repair_times), 1)
+    else:
+        avg_repair_days = None
+
+    # Most reported locations (top 5 by reports_count)
+    top_reported = sorted(records, key=lambda r: r.reports_count or 1, reverse=True)[:5]
+
+    # Potholes by day (last 30 days)
+    from collections import defaultdict
+    daily = defaultdict(int)
+    for r in records:
+        created = r.created_at.replace(tzinfo=timezone.utc) if r.created_at.tzinfo is None else r.created_at
+        days_ago = (now - created).days
+        if days_ago <= 30:
+            date_str = r.created_at.strftime("%b %d")
+            daily[date_str] += 1
+
+    return {
+        "total": total,
+        "resolved": resolved,
+        "unresolved": unresolved,
+        "high_severity": high_severity,
+        "avg_repair_days": avg_repair_days,
+        "top_reported": [
+            {
+                "id": r.id,
+                "latitude": r.latitude,
+                "longitude": r.longitude,
+                "reports_count": r.reports_count,
+                "confidence_avg": r.confidence_avg,
+            }
+            for r in top_reported
+        ],
+        "daily_counts": [{"date": k, "count": v} for k, v in sorted(daily.items())],
+    }
