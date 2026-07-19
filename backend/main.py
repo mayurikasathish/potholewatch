@@ -17,6 +17,9 @@ import os
 from typing import List
 from fastapi.staticfiles import StaticFiles
 
+# Create uploads directory if it doesn't exist
+os.makedirs("uploads", exist_ok=True)
+
 app = FastAPI()
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
