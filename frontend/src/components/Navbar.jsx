@@ -8,6 +8,7 @@ export default function Navbar() {
     { to: "/report", label: "Report" },
     { to: "/map", label: "Map" },
     { to: "/route", label: "Route Checker" },
+    { to: "/my-reports", label: "My Reports" },
     { to: "/analytics", label: "Analytics" },
     { to: "/authority", label: "Authority" }
   ];

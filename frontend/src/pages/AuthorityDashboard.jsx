@@ -176,15 +176,30 @@ export default function AuthorityDashboard() {
             Manage and prioritize pothole repairs across the city
           </p>
         </div>
-        <button onClick={() => setAuthed(false)} style={{
-          background: "transparent", color: "rgba(255,255,255,0.5)",
-          border: "1px solid rgba(255,255,255,0.2)",
-          borderRadius: 6, padding: "8px 16px",
-          fontFamily: "Space Grotesk, sans-serif",
-          fontWeight: 600, fontSize: 13, cursor: "pointer",
-        }}>
-          Sign Out
-        </button>
+        <div style={{ display: "flex", gap: 12 }}>
+          <a
+            href={`${API}/export/csv`}
+            download
+            style={{
+              background: "var(--amber)", color: "var(--navy)",
+              border: "none", borderRadius: 6, padding: "10px 20px",
+              fontFamily: "Space Grotesk, sans-serif",
+              fontWeight: 700, fontSize: 14, cursor: "pointer",
+              textDecoration: "none", display: "flex", alignItems: "center", gap: 8,
+            }}
+          >
+            📥 Export CSV
+          </a>
+          <button onClick={() => setAuthed(false)} style={{
+            background: "transparent", color: "rgba(255,255,255,0.5)",
+            border: "1px solid rgba(255,255,255,0.2)",
+            borderRadius: 6, padding: "8px 16px",
+            fontFamily: "Space Grotesk, sans-serif",
+            fontWeight: 600, fontSize: 13, cursor: "pointer",
+          }}>
+            Sign Out
+          </button>
+        </div>
       </div>
 
       <div style={{ padding: 48, maxWidth: 1200, margin: "0 auto" }}>

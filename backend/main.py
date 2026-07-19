@@ -3,6 +3,7 @@ import os
 load_dotenv()
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from ultralytics import YOLO
 from PIL import Image
 from sqlalchemy import create_engine, Column, Integer, Float, String, Text, DateTime, func
@@ -45,6 +46,7 @@ class Detection(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     reports_count = Column(Integer, default=1)
     location = Column(Geography(geometry_type='POINT', srid=4326))
+    reference_id = Column(String(20), unique=True)
 
 class DetectionImage(Base):
     __tablename__ = "detection_images"
@@ -54,7 +56,14 @@ class DetectionImage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 # Load YOLO model once
-model = YOLO(os.getenv("MODEL_PATH", "model/best.pt"))
+MODEL_PATH = os.getenv("MODEL_PATH", "model/best.pt")
+if not os.path.exists(MODEL_PATH):
+    raise FileNotFoundError(
+        f"❌ Model file not found at: {MODEL_PATH}\n"
+        f"Please ensure the YOLOv8 model weights are in the correct location.\n"
+        f"Expected path: {MODEL_PATH}"
+    )
+model = YOLO(MODEL_PATH)
 
 # Save uploads to a folder
 os.makedirs("uploads", exist_ok=True)
@@ -170,6 +179,11 @@ async def detect_potholes(
         db.commit()
         db.refresh(record)
 
+        # Generate reference ID after we have the record ID
+        record.reference_id = f"PW-{record.created_at.year}-{str(record.id).zfill(4)}"
+        db.commit()
+        db.refresh(record)
+
     # Save supporting images
     for sup_file in supporting_images:
         sup_bytes = await sup_file.read()
@@ -187,6 +201,7 @@ async def detect_potholes(
     record_id = record.id
     record_status = record.status
     record_reports_count = record.reports_count
+    record_reference_id = record.reference_id
     db.close()
 
     return {
@@ -197,6 +212,7 @@ async def detect_potholes(
         "status": record_status,
         "reports_count": record_reports_count,
         "is_duplicate": is_duplicate,
+        "reference_id": record_reference_id,
         "image_width": image.width,
         "image_height": image.height,
         "detections": detections,
@@ -218,6 +234,7 @@ def get_all_detections():
             "created_at": r.created_at,
             "image_path": r.image_path,
             "reports_count": r.reports_count,
+            "reference_id": r.reference_id,
         }
         for r in records
     ]
@@ -360,3 +377,59 @@ def analytics_summary():
         ],
         "daily_counts": [{"date": k, "count": v} for k, v in sorted(daily.items())],
     }
+
+@app.get("/track/{reference_id}")
+def track_pothole(reference_id: str):
+    db = SessionLocal()
+    record = db.query(Detection).filter(Detection.reference_id == reference_id).first()
+    db.close()
+    if not record:
+        return {"error": "Reference ID not found"}
+
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+    created = record.created_at.replace(tzinfo=timezone.utc) if record.created_at.tzinfo is None else record.created_at
+    days = (now - created).days
+
+    return {
+        "reference_id": record.reference_id,
+        "status": record.status,
+        "pothole_count": record.pothole_count,
+        "confidence_avg": record.confidence_avg,
+        "latitude": record.latitude,
+        "longitude": record.longitude,
+        "reports_count": record.reports_count,
+        "days_unresolved": days,
+        "created_at": record.created_at,
+    }
+
+@app.get("/export/csv")
+def export_csv():
+    db = SessionLocal()
+    records = db.query(Detection).order_by(Detection.created_at.desc()).all()
+    db.close()
+
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+
+    # Build CSV content
+    csv_lines = []
+    csv_lines.append("Reference ID,Status,Pothole Count,Citizen Reports,Confidence,Latitude,Longitude,Days Open,Created Date,Image Path")
+
+    for r in records:
+        created = r.created_at.replace(tzinfo=timezone.utc) if r.created_at.tzinfo is None else r.created_at
+        days_open = (now - created).days
+        created_str = r.created_at.strftime("%Y-%m-%d %H:%M:%S")
+
+        csv_lines.append(
+            f"{r.reference_id or 'N/A'},{r.status},{r.pothole_count},{r.reports_count or 1},"
+            f"{r.confidence_avg:.3f},{r.latitude},{r.longitude},{days_open},{created_str},{r.image_path or ''}"
+        )
+
+    csv_content = "\n".join(csv_lines)
+
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=pothole_reports_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
+    )

@@ -187,6 +187,15 @@ export default function ReportPage() {
       } else {
         toast.success(`${res.data.pothole_count} pothole${res.data.pothole_count !== 1 ? "s" : ""} detected and reported!`);
       }
+
+      // Save to localStorage for My Reports page
+      if (res.data.reference_id && res.data.pothole_count > 0) {
+        const existing = JSON.parse(localStorage.getItem("myReports") || "[]");
+        if (!existing.includes(res.data.reference_id)) {
+          existing.push(res.data.reference_id);
+          localStorage.setItem("myReports", JSON.stringify(existing));
+        }
+      }
     } catch {
       toast.error("Detection failed — is the backend running?");
     }
@@ -353,6 +362,47 @@ export default function ReportPage() {
           ) : (
             <div style={{ background: "var(--white)", borderRadius: 12, border: "1px solid var(--border)", padding: 32 }}>
               <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 20 }}>Detection Result</h2>
+
+              {/* Reference ID Tracking Card */}
+              {result.reference_id && result.pothole_count > 0 && (
+                <div style={{
+                  background: "var(--navy)", borderRadius: 12,
+                  padding: 24, marginBottom: 24,
+                  border: "2px solid var(--amber)",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                    <span style={{ fontSize: 24 }}>🔖</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 4, fontWeight: 600 }}>
+                        YOUR TRACKING ID
+                      </p>
+                      <p style={{
+                        fontSize: 22, fontWeight: 700, color: "var(--amber)",
+                        fontFamily: "Space Grotesk, monospace", letterSpacing: 1,
+                      }}>
+                        {result.reference_id}
+                      </p>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 16 }}>
+                    Save this ID to track your report's repair status anytime
+                  </p>
+                  <a
+                    href={`/track/${result.reference_id}`}
+                    style={{
+                      display: "inline-block",
+                      background: "var(--amber)", color: "var(--navy)",
+                      padding: "10px 20px", borderRadius: 8,
+                      fontFamily: "Space Grotesk, sans-serif",
+                      fontWeight: 700, fontSize: 14,
+                      textDecoration: "none",
+                    }}
+                  >
+                    Track Your Report →
+                  </a>
+                </div>
+              )}
+
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
                 {[
                   { label: "Potholes", value: result.pothole_count, color: "#EF4444" },

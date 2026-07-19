@@ -7,6 +7,8 @@ import RouteChecker from "./pages/RouteChecker";
 import Navbar from "./components/Navbar";
 import AuthorityDashboard from "./pages/AuthorityDashboard";
 import Analytics from "./pages/Analytics";
+import TrackPage from "./pages/TrackPage";
+import MyReportsPage from "./pages/MyReportsPage";
 
 
 export default function App() {
@@ -26,6 +28,8 @@ export default function App() {
         <Route path="/map" element={<MapDashboard />} />
         <Route path="/route" element={<RouteChecker />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/my-reports" element={<MyReportsPage />} />
+        <Route path="/track/:reference_id" element={<TrackPage />} />
         <Route path="/authority" element={<AuthorityDashboard />} />
       </Routes>
     </BrowserRouter>
