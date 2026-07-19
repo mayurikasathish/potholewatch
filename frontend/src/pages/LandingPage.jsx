@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 
-const API = "http://127.0.0.1:8000";
+const API = import.meta.env.VITE_API_URL;;
 
 function AnimatedCounter({ target, duration = 1500 }) {
   const [count, setCount] = useState(0);

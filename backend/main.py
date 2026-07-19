@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+import os
+load_dotenv()
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
@@ -22,7 +25,7 @@ app.add_middleware(
 )
 
 # Database setup
-DATABASE_URL = "postgresql://postgres:Ruby123+@localhost:5432/pothole_db"
+DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
@@ -47,7 +50,7 @@ class DetectionImage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 # Load YOLO model once
-model = YOLO("model/best.pt")
+model = YOLO(os.getenv("MODEL_PATH", "model/best.pt"))
 
 # Save uploads to a folder
 os.makedirs("uploads", exist_ok=True)

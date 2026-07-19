@@ -11,7 +11,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-const API = "http://127.0.0.1:8000";
+const API = import.meta.env.VITE_API_URL;;
 
 function severityColor(confidence_avg) {
   if (confidence_avg > 0.6) return "#EF4444";

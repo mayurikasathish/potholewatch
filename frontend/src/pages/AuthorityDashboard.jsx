@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
-const API = "http://127.0.0.1:8000";
+const API = import.meta.env.VITE_API_URL;;
 const PASSWORD = "admin123";
 
 async function reverseGeocode(lat, lng) {
