@@ -4,8 +4,8 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Model weights
-backend/model/best.pt
+# Model weights (uncomment if model is too large for git)
+# backend/model/best.pt
 
 # Uploads
 backend/uploads/
