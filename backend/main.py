@@ -5,7 +5,7 @@ from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 from PIL import Image
-from sqlalchemy import create_engine, Column, Integer, Float, String, Text, DateTime
+from sqlalchemy import create_engine, Column, Integer, Float, String, Text, DateTime, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from geoalchemy2 import Geography
@@ -245,3 +245,40 @@ def get_detection_images(detection_id: int):
     images = db.query(DetectionImage).filter(DetectionImage.detection_id == detection_id).all()
     db.close()
     return [{"id": i.id, "image_path": i.image_path} for i in images]
+
+@app.get("/detections/priority")
+def get_priority_detections():
+    db = SessionLocal()
+    records = db.query(Detection).filter(Detection.status != "resolved").all()
+    db.close()
+
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+
+    scored = []
+    for r in records:
+        created = r.created_at
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        days = (now - created).days
+
+        score = (
+            (r.confidence_avg * 40) +
+            (min(r.reports_count, 10) * 30) +
+            (min(days, 30) * 30 / 30)
+        )
+        scored.append({
+            "id": r.id,
+            "latitude": r.latitude,
+            "longitude": r.longitude,
+            "pothole_count": r.pothole_count,
+            "confidence_avg": r.confidence_avg,
+            "reports_count": r.reports_count,
+            "status": r.status,
+            "days_unresolved": days,
+            "priority_score": round(score, 1),
+            "created_at": r.created_at,
+        })
+
+    scored.sort(key=lambda x: x["priority_score"], reverse=True)
+    return scored

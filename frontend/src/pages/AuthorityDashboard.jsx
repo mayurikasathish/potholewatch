@@ -56,7 +56,9 @@ export default function AuthorityDashboard() {
   const [addresses, setAddresses] = useState({});
   const [selectedImage, setSelectedImage] = useState(null);
   const [modalImages, setModalImages] = useState([]);
-const [modalIndex, setModalIndex] = useState(0);
+  const [modalIndex, setModalIndex] = useState(0);
+  const [priorityList, setPriorityList] = useState([]);
+  const [activeTab, setActiveTab] = useState("reports");
 
   const handleLogin = () => {
     if (password === PASSWORD) {
@@ -76,6 +78,10 @@ const [modalIndex, setModalIndex] = useState(0);
       addrs[d.id] = addr;
     }
     setAddresses(addrs);
+
+    // Also fetch priority list
+    const priorityRes = await axios.get(`${API}/detections/priority`);
+    setPriorityList(priorityRes.data);
   };
 
   useEffect(() => {
@@ -228,7 +234,27 @@ const [modalIndex, setModalIndex] = useState(0);
           </div>
         </div>
 
+        {/* Tab switcher */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+          {[
+            { key: "reports", label: "All Reports" },
+            { key: "priority", label: "🚨 Priority Queue" },
+          ].map(({ key, label }) => (
+            <button key={key} onClick={() => setActiveTab(key)} style={{
+              padding: "10px 24px", borderRadius: 8,
+              border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer",
+              background: activeTab === key ? "var(--navy)" : "var(--white)",
+              color: activeTab === key ? "var(--white)" : "var(--gray)",
+              fontFamily: "Space Grotesk, sans-serif",
+              border: "1px solid var(--border)",
+            }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
         {/* Reports table */}
+        {activeTab === "reports" && (
         <div style={{ background: "var(--white)", borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
           <div style={{
             padding: "20px 28px", borderBottom: "1px solid var(--border)",
@@ -373,6 +399,130 @@ const [modalIndex, setModalIndex] = useState(0);
             </div>
           )}
         </div>
+        )}
+
+        {activeTab === "priority" && (
+        <div style={{ background: "var(--white)", borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
+          <div style={{ padding: "20px 28px", borderBottom: "1px solid var(--border)" }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Priority Queue</h3>
+            <p style={{ fontSize: 13, color: "var(--gray)", marginTop: 4 }}>
+              Ranked by severity, citizen reports, and days unresolved
+            </p>
+          </div>
+
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "var(--gray-light)" }}>
+                {["Rank", "Priority Score", "Location", "Potholes", "Citizens", "Days Open", "Status", "Actions"].map(h => (
+                  <th key={h} style={{
+                    padding: "12px 16px", textAlign: "left",
+                    fontSize: 11, fontWeight: 700, color: "var(--gray)",
+                    letterSpacing: 0.5, textTransform: "uppercase",
+                  }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {priorityList.map((d, i) => (
+                <tr key={d.id} style={{
+                  borderTop: "1px solid var(--border)",
+                  background: i === 0 ? "#FFF5F5" : i === 1 ? "#FFFBF0" : "var(--white)",
+                }}>
+                  <td style={{ padding: "14px 16px" }}>
+                    <span style={{
+                      fontFamily: "Space Grotesk, sans-serif",
+                      fontWeight: 700, fontSize: 18,
+                      color: i === 0 ? "#EF4444" : i === 1 ? "#F59E0B" : "var(--gray)",
+                    }}>
+                      #{i + 1}
+                    </span>
+                  </td>
+                  <td style={{ padding: "14px 16px" }}>
+                    <div style={{
+                      background: i === 0 ? "#EF4444" : i === 1 ? "#F59E0B" : "var(--navy)",
+                      color: "white", borderRadius: 8,
+                      padding: "6px 12px", display: "inline-block",
+                      fontFamily: "Space Grotesk, sans-serif",
+                      fontWeight: 700, fontSize: 16,
+                    }}>
+                      {d.priority_score}
+                    </div>
+                  </td>
+                  <td style={{ padding: "14px 16px", fontSize: 12, color: "var(--gray)", maxWidth: 180 }}>
+                    {addresses[d.id]
+                      ? addresses[d.id].split(",").slice(0, 2).join(",")
+                      : `${d.latitude?.toFixed(4)}, ${d.longitude?.toFixed(4)}`}
+                    <br />
+                    <a
+                      href={`https://www.google.com/maps?q=${d.latitude},${d.longitude}`}
+                      target="_blank" rel="noreferrer"
+                      style={{ fontSize: 11, color: "var(--amber)", fontWeight: 600, textDecoration: "none" }}
+                    >
+                      🗺️ Maps
+                    </a>
+                  </td>
+                  <td style={{ padding: "14px 16px", fontSize: 14, fontWeight: 700 }}>{d.pothole_count}</td>
+                  <td style={{ padding: "14px 16px" }}>
+                    <span style={{
+                      background: d.reports_count > 2 ? "#FEF3C7" : "var(--gray-light)",
+                      color: d.reports_count > 2 ? "#92400E" : "var(--gray)",
+                      fontSize: 12, fontWeight: 700,
+                      padding: "3px 10px", borderRadius: 10,
+                    }}>
+                      {d.reports_count} 👥
+                    </span>
+                  </td>
+                  <td style={{ padding: "14px 16px" }}>
+                    <span style={{
+                      color: d.days_unresolved > 7 ? "#EF4444" : d.days_unresolved > 3 ? "#F59E0B" : "#10B981",
+                      fontWeight: 700, fontSize: 13,
+                    }}>
+                      {d.days_unresolved}d
+                    </span>
+                  </td>
+                  <td style={{ padding: "14px 16px" }}><StatusBadge status={d.status} /></td>
+                  <td style={{ padding: "14px 16px" }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {d.status !== "under_review" && d.status !== "resolved" && (
+                        <button
+                          onClick={() => handleStatusUpdate(d.id, "under_review")}
+                          disabled={updating === d.id}
+                          style={{
+                            padding: "4px 10px", fontSize: 11, fontWeight: 600,
+                            background: "#DBEAFE", color: "#1E40AF",
+                            border: "none", borderRadius: 6, cursor: "pointer",
+                            fontFamily: "Space Grotesk, sans-serif",
+                          }}>
+                          Review
+                        </button>
+                      )}
+                      {d.status !== "resolved" && (
+                        <button
+                          onClick={() => handleStatusUpdate(d.id, "resolved")}
+                          disabled={updating === d.id}
+                          style={{
+                            padding: "4px 10px", fontSize: 11, fontWeight: 600,
+                            background: "#D1FAE5", color: "#065F46",
+                            border: "none", borderRadius: 6, cursor: "pointer",
+                            fontFamily: "Space Grotesk, sans-serif",
+                          }}>
+                          {updating === d.id ? "..." : "Resolve"}
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {priorityList.length === 0 && (
+            <div style={{ padding: 48, textAlign: "center", color: "var(--gray)" }}>
+              No unresolved potholes — great work! 🎉
+            </div>
+          )}
+        </div>
+        )}
       </div>
 
       {/* Image Modal */}
