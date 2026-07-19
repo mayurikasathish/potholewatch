@@ -72,6 +72,12 @@ def update_status(detection_id: int, status: str):
     db.close()
     return {"id": record.id, "status": record.status}
 
+@app.post("/auth/login")
+async def login(password: str = Form(...)):
+    if password == os.getenv("AUTHORITY_PASSWORD"):
+        return {"success": True}
+    return {"success": False}
+
 @app.get("/")
 def root():
     return {"status": "Pothole Detection API is running"}
