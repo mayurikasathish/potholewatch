@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import toast from "react-hot-toast";
 
 const API = import.meta.env.VITE_API_URL;;
 const PASSWORD = "admin123";
@@ -86,6 +87,7 @@ const [modalIndex, setModalIndex] = useState(0);
     await axios.patch(`${API}/detections/${id}/status?status=${newStatus}`);
     await fetchDetections();
     setUpdating(null);
+    toast.success(`Status updated to ${newStatus.replace("_", " ")}`);
   };
 
   const severityData = [

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from "react-leaflet";
 import { GeoSearchControl, OpenStreetMapProvider } from "leaflet-geosearch";
+import toast from "react-hot-toast";
 import "leaflet/dist/leaflet.css";
 import "leaflet-geosearch/dist/geosearch.css";
 import L from "leaflet";
@@ -81,7 +82,7 @@ export default function RouteChecker() {
 
   const handleCheck = async () => {
     if (!fromText || !toText) {
-      alert("Please enter both From and To locations");
+      toast.error("Please enter both From and To locations");
       return;
     }
 
@@ -90,8 +91,8 @@ export default function RouteChecker() {
     const toCoords = await geocode(toText);
     setGeocoding(false);
 
-    if (!fromCoords) { alert(`Could not find location: ${fromText}`); return; }
-    if (!toCoords) { alert(`Could not find location: ${toText}`); return; }
+    if (!fromCoords) { toast.error(`Could not find location: ${fromText}`); return; }
+    if (!toCoords) { toast.error(`Could not find location: ${toText}`); return; }
 
     setFrom(fromCoords);
     setTo(toCoords);
@@ -110,8 +111,9 @@ export default function RouteChecker() {
         },
       });
       setResult(res.data);
+      toast.success(`Found ${res.data.total} pothole${res.data.total !== 1 ? "s" : ""} along your route`);
     } catch {
-      alert("Failed to check route");
+      toast.error("Failed to check route");
     }
     setLoading(false);
   };

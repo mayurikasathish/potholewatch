@@ -3,6 +3,7 @@ import axios from "axios";
 import exifr from "exifr";
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import { GeoSearchControl, OpenStreetMapProvider } from "leaflet-geosearch";
+import toast from "react-hot-toast";
 import "leaflet/dist/leaflet.css";
 import "leaflet-geosearch/dist/geosearch.css";
 import L from "leaflet";
@@ -143,13 +144,13 @@ export default function ReportPage() {
         const addr = await reverseGeocode(lat, lng);
         setAddress(addr);
       },
-      () => alert("Could not get location — please allow location access")
+      () => toast.error("Could not get location — please allow location access")
     );
   };
 
   const handleSubmit = async () => {
     if (!file || !latitude || !longitude) {
-      alert("Please upload an image and set a location");
+      toast.error("Please upload an image and set a location");
       return;
     }
     setLoading(true);
@@ -164,8 +165,9 @@ export default function ReportPage() {
       const res = await axios.post(`${API}/detect`, formData);
       setResult(res.data);
       setStep(3);
+      toast.success(`${res.data.pothole_count} pothole${res.data.pothole_count !== 1 ? "s" : ""} detected!`);
     } catch {
-      alert("Detection failed — is the backend running?");
+      toast.error("Detection failed — is the backend running?");
     }
     setLoading(false);
   };

@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 import LandingPage from "./pages/LandingPage";
 import ReportPage from "./pages/ReportPage";
 import MapDashboard from "./pages/MapDashboard";
@@ -11,6 +12,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <Navbar />
+      <Toaster position="top-right" toastOptions={{
+      duration: 4000,
+      style: {
+        fontFamily: "Space Grotesk, sans-serif",
+        fontSize: 14,
+      },
+    }} />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/report" element={<ReportPage />} />
@@ -19,5 +27,6 @@ export default function App() {
         <Route path="/authority" element={<AuthorityDashboard />} />
       </Routes>
     </BrowserRouter>
+    
   );
 }
