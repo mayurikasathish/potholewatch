@@ -1,2 +1,8 @@
 [phases.setup]
-nixPkgs = ["libxcb", "libGL"]
+nixPkgs = ["libxcb", "libGL", "mesa", "libGLU", "xorg.libX11", "xorg.libXext"]
+
+[phases.install]
+cmds = ["chmod +x backend/install.sh", "cd backend && ./install.sh"]
+
+[start]
+cmd = "cd backend && gunicorn -c gunicorn_conf.py main:app"
