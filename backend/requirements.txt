@@ -8,3 +8,4 @@ psycopg2-binary==2.9.12
 ultralytics==8.4.83
 pillow==12.2.0
 python-dotenv==1.2.2
+opencv-python-headless==4.13.0.92
