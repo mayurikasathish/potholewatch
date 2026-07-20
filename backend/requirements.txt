@@ -5,7 +5,11 @@ python-multipart==0.0.32
 SQLAlchemy==2.0.51
 GeoAlchemy2==0.20.0
 psycopg2-binary==2.9.12
-ultralytics==8.4.83
 pillow==12.2.0
 python-dotenv==1.2.2
-opencv-python-headless==4.13.0.92
+
+# Install headless OpenCV BEFORE ultralytics to avoid GUI dependencies
+opencv-python-headless==4.10.0.84
+
+# ML - will use opencv-python-headless from above
+ultralytics==8.4.83
