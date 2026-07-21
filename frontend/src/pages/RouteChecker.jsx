@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap, useMapEvents } from "react-leaflet";
 import { GeoSearchControl, OpenStreetMapProvider } from "leaflet-geosearch";
 import toast from "react-hot-toast";
 import "leaflet/dist/leaflet.css";
@@ -52,6 +52,39 @@ async function geocode(placeName) {
   return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), display: data[0].display_name };
 }
 
+function LocationPicker({ onLocationSelect, initialLocation }) {
+  useMapEvents({
+    click(e) {
+      onLocationSelect(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return initialLocation ? <Marker position={[initialLocation.lat, initialLocation.lng]} /> : null;
+}
+
+function SearchControl({ onLocationSelect }) {
+  const map = useMap();
+  useEffect(() => {
+    const provider = new OpenStreetMapProvider();
+    const searchControl = new GeoSearchControl({
+      provider,
+      style: "bar",
+      showMarker: false,
+      showPopup: false,
+      autoClose: true,
+      retainZoomLevel: false,
+      animateZoom: true,
+      keepResult: true,
+      searchLabel: "Search for a location...",
+    });
+    map.addControl(searchControl);
+    map.on("geosearch/showlocation", (e) => {
+      onLocationSelect(e.location.y, e.location.x);
+    });
+    return () => map.removeControl(searchControl);
+  }, [map, onLocationSelect]);
+  return null;
+}
+
 function RiskBadge({ total, high }) {
   const level = high > 2 ? "HIGH RISK" : high > 0 ? "MODERATE" : total > 0 ? "LOW RISK" : "CLEAR";
   const color = high > 2 ? "#EF4444" : high > 0 ? "#F59E0B" : total > 0 ? "#10B981" : "#6B7280";
@@ -79,34 +112,81 @@ export default function RouteChecker() {
   const [loading, setLoading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [mapCenter, setMapCenter] = useState([19.0760, 72.8777]);
+  const [showLocationPicker, setShowLocationPicker] = useState(null); // 'from' | 'to' | null
+  const [tempLocation, setTempLocation] = useState(null);
 
-  const handleCheck = async () => {
-    if (!fromText || !toText) {
-      toast.error("Please enter both From and To locations");
+  const handleGetCurrentLocation = (type) => {
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=en`
+        );
+        const data = await res.json();
+        const displayName = data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        const location = { lat, lng, display: displayName };
+
+        if (type === 'from') {
+          setFrom(location);
+          setFromText(displayName.split(",").slice(0, 2).join(","));
+        } else {
+          setTo(location);
+          setToText(displayName.split(",").slice(0, 2).join(","));
+        }
+        toast.success(`Current location set for ${type === 'from' ? 'From' : 'To'}`);
+      },
+      () => toast.error("Could not get location — please allow location access")
+    );
+  };
+
+  const handleOpenLocationPicker = (type) => {
+    setShowLocationPicker(type);
+    setTempLocation(type === 'from' ? from : to);
+  };
+
+  const handleConfirmLocation = async () => {
+    if (!tempLocation) {
+      toast.error("Please select a location on the map");
       return;
     }
 
-    setGeocoding(true);
-    const fromCoords = await geocode(fromText);
-    const toCoords = await geocode(toText);
-    setGeocoding(false);
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${tempLocation.lat}&lon=${tempLocation.lng}&format=json&accept-language=en`
+    );
+    const data = await res.json();
+    const displayName = data.display_name || `${tempLocation.lat.toFixed(5)}, ${tempLocation.lng.toFixed(5)}`;
+    const location = { ...tempLocation, display: displayName };
 
-    if (!fromCoords) { toast.error(`Could not find location: ${fromText}`); return; }
-    if (!toCoords) { toast.error(`Could not find location: ${toText}`); return; }
+    if (showLocationPicker === 'from') {
+      setFrom(location);
+      setFromText(displayName.split(",").slice(0, 2).join(","));
+    } else {
+      setTo(location);
+      setToText(displayName.split(",").slice(0, 2).join(","));
+    }
+    setShowLocationPicker(null);
+    setTempLocation(null);
+    toast.success(`Location set for ${showLocationPicker === 'from' ? 'From' : 'To'}`);
+  };
 
-    setFrom(fromCoords);
-    setTo(toCoords);
+  const handleCheck = async () => {
+    if (!from || !to) {
+      toast.error("Please set both From and To locations");
+      return;
+    }
+
     setMapCenter([
-      (fromCoords.lat + toCoords.lat) / 2,
-      (fromCoords.lng + toCoords.lng) / 2,
+      (from.lat + to.lat) / 2,
+      (from.lng + to.lng) / 2,
     ]);
 
     setLoading(true);
     try {
       const res = await axios.get(`${API}/detections/near-route`, {
         params: {
-          lat1: fromCoords.lat, lng1: fromCoords.lng,
-          lat2: toCoords.lat, lng2: toCoords.lng,
+          lat1: from.lat, lng1: from.lng,
+          lat2: to.lat, lng2: to.lng,
           radius_km: radius,
         },
       });
@@ -144,8 +224,32 @@ export default function RouteChecker() {
               <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gray)", marginBottom: 8, letterSpacing: 0.5 }}>
                 FROM
               </p>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <button
+                  onClick={() => handleGetCurrentLocation('from')}
+                  style={{
+                    background: "var(--navy)", color: "var(--white)",
+                    border: "none", borderRadius: 6, padding: "8px 12px",
+                    fontFamily: "Space Grotesk, sans-serif", fontWeight: 600,
+                    fontSize: 12, cursor: "pointer", flex: 1,
+                  }}
+                >
+                  📡 Current Location
+                </button>
+                <button
+                  onClick={() => handleOpenLocationPicker('from')}
+                  style={{
+                    background: "var(--gray-light)", color: "var(--navy)",
+                    border: "1px solid var(--border)", borderRadius: 6, padding: "8px 12px",
+                    fontFamily: "Space Grotesk, sans-serif", fontWeight: 600,
+                    fontSize: 12, cursor: "pointer", flex: 1,
+                  }}
+                >
+                  📍 Pick on Map
+                </button>
+              </div>
               <input
-                placeholder="e.g. Andheri, Mumbai"
+                placeholder="Or type location..."
                 value={fromText}
                 onChange={(e) => setFromText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleCheck()}
@@ -167,8 +271,32 @@ export default function RouteChecker() {
               <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gray)", marginBottom: 8, letterSpacing: 0.5 }}>
                 TO
               </p>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <button
+                  onClick={() => handleGetCurrentLocation('to')}
+                  style={{
+                    background: "var(--navy)", color: "var(--white)",
+                    border: "none", borderRadius: 6, padding: "8px 12px",
+                    fontFamily: "Space Grotesk, sans-serif", fontWeight: 600,
+                    fontSize: 12, cursor: "pointer", flex: 1,
+                  }}
+                >
+                  📡 Current Location
+                </button>
+                <button
+                  onClick={() => handleOpenLocationPicker('to')}
+                  style={{
+                    background: "var(--gray-light)", color: "var(--navy)",
+                    border: "1px solid var(--border)", borderRadius: 6, padding: "8px 12px",
+                    fontFamily: "Space Grotesk, sans-serif", fontWeight: 600,
+                    fontSize: 12, cursor: "pointer", flex: 1,
+                  }}
+                >
+                  📍 Pick on Map
+                </button>
+              </div>
               <input
-                placeholder="e.g. Thane, Mumbai"
+                placeholder="Or type location..."
                 value={toText}
                 onChange={(e) => setToText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleCheck()}
@@ -203,17 +331,18 @@ export default function RouteChecker() {
 
             <button
               onClick={handleCheck}
-              disabled={loading || geocoding}
+              disabled={loading || !from || !to}
               style={{
-                background: "var(--amber)", color: "var(--navy)",
+                background: from && to ? "var(--amber)" : "var(--border)",
+                color: from && to ? "var(--navy)" : "var(--gray)",
                 border: "none", borderRadius: 8,
                 padding: "11px 28px",
                 fontFamily: "Space Grotesk, sans-serif",
                 fontWeight: 700, fontSize: 15,
-                cursor: "pointer",
+                cursor: from && to ? "pointer" : "not-allowed",
               }}
             >
-              {geocoding ? "Finding..." : loading ? "Checking..." : "Check Route"}
+              {loading ? "Checking..." : "Check Route"}
             </button>
           </div>
         </div>
@@ -346,6 +475,89 @@ export default function RouteChecker() {
           </div>
         )}
       </div>
+
+      {/* Location Picker Modal */}
+      {showLocationPicker && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0, 0, 0, 0.5)", zIndex: 9999,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 20,
+        }}>
+          <div style={{
+            background: "var(--white)", borderRadius: 12,
+            padding: 32, maxWidth: 800, width: "100%",
+            maxHeight: "90vh", overflow: "auto",
+          }}>
+            <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 16 }}>
+              Select {showLocationPicker === 'from' ? 'From' : 'To'} Location
+            </h2>
+            <p style={{ color: "var(--gray)", marginBottom: 16, fontSize: 14 }}>
+              Search for a location or click anywhere on the map
+            </p>
+
+            {tempLocation && (
+              <div style={{
+                background: "var(--gray-light)", borderRadius: 8,
+                padding: 12, marginBottom: 16, fontSize: 13, color: "var(--gray)",
+              }}>
+                Selected: {tempLocation.lat.toFixed(5)}, {tempLocation.lng.toFixed(5)}
+              </div>
+            )}
+
+            <div style={{ borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
+              <MapContainer
+                center={tempLocation ? [tempLocation.lat, tempLocation.lng] : [19.0760, 72.8777]}
+                zoom={12}
+                style={{ height: 400 }}
+              >
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <SearchControl onLocationSelect={(lat, lng) => setTempLocation({ lat, lng })} />
+                <LocationPicker
+                  onLocationSelect={(lat, lng) => setTempLocation({ lat, lng })}
+                  initialLocation={tempLocation}
+                />
+              </MapContainer>
+            </div>
+
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                onClick={() => {
+                  setShowLocationPicker(null);
+                  setTempLocation(null);
+                }}
+                style={{
+                  flex: 1,
+                  background: "var(--gray-light)", color: "var(--navy)",
+                  border: "1px solid var(--border)", borderRadius: 8,
+                  padding: "12px 24px",
+                  fontFamily: "Space Grotesk, sans-serif",
+                  fontWeight: 700, fontSize: 15,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmLocation}
+                disabled={!tempLocation}
+                style={{
+                  flex: 1,
+                  background: tempLocation ? "var(--amber)" : "var(--border)",
+                  color: tempLocation ? "var(--navy)" : "var(--gray)",
+                  border: "none", borderRadius: 8,
+                  padding: "12px 24px",
+                  fontFamily: "Space Grotesk, sans-serif",
+                  fontWeight: 700, fontSize: 15,
+                  cursor: tempLocation ? "pointer" : "not-allowed",
+                }}
+              >
+                Confirm Location
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
