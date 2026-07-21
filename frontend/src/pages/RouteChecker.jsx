@@ -224,7 +224,7 @@ export default function RouteChecker() {
               <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gray)", marginBottom: 8, letterSpacing: 0.5 }}>
                 FROM
               </p>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <div style={{ display: "flex", gap: 8 }}>
                 <button
                   onClick={() => handleGetCurrentLocation('from')}
                   style={{
@@ -248,20 +248,8 @@ export default function RouteChecker() {
                   📍 Pick on Map
                 </button>
               </div>
-              <input
-                placeholder="Or type location..."
-                value={fromText}
-                onChange={(e) => setFromText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCheck()}
-                style={{
-                  width: "100%", padding: "10px 12px",
-                  border: "1px solid var(--border)", borderRadius: 6,
-                  fontSize: 14, outline: "none",
-                  fontFamily: "Inter, sans-serif",
-                }}
-              />
               {from && (
-                <p style={{ fontSize: 11, color: "#10B981", marginTop: 4, fontWeight: 600 }}>
+                <p style={{ fontSize: 11, color: "#10B981", marginTop: 8, fontWeight: 600 }}>
                   ✓ {from.display.split(",").slice(0, 2).join(",")}
                 </p>
               )}
@@ -271,7 +259,7 @@ export default function RouteChecker() {
               <p style={{ fontSize: 12, fontWeight: 600, color: "var(--gray)", marginBottom: 8, letterSpacing: 0.5 }}>
                 TO
               </p>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <div style={{ display: "flex", gap: 8 }}>
                 <button
                   onClick={() => handleGetCurrentLocation('to')}
                   style={{
@@ -295,20 +283,8 @@ export default function RouteChecker() {
                   📍 Pick on Map
                 </button>
               </div>
-              <input
-                placeholder="Or type location..."
-                value={toText}
-                onChange={(e) => setToText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCheck()}
-                style={{
-                  width: "100%", padding: "10px 12px",
-                  border: "1px solid var(--border)", borderRadius: 6,
-                  fontSize: 14, outline: "none",
-                  fontFamily: "Inter, sans-serif",
-                }}
-              />
               {to && (
-                <p style={{ fontSize: 11, color: "#10B981", marginTop: 4, fontWeight: 600 }}>
+                <p style={{ fontSize: 11, color: "#10B981", marginTop: 8, fontWeight: 600 }}>
                   ✓ {to.display.split(",").slice(0, 2).join(",")}
                 </p>
               )}
